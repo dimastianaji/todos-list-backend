@@ -4,12 +4,11 @@ const express = require('express');
 
 const connectDB = require('./config/database');
 
-const logger = require('./middleware/Logger')
+const logger = require('./middleware/Logger');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
+const protect = require('./middleware/protect');
 
-const AppError = require('./util/AppError');
-const catchAsync = require('./util/catchAsync');
 const app = express();
 
 const authRoute = require('./route/authRoute');

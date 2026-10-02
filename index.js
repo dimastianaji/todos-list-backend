@@ -8,6 +8,7 @@ const logger = require('./middleware/Logger');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const protect = require('./middleware/protect');
+const restrictTo = require('./middleware/restrictTo');
 
 const app = express();
 

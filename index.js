@@ -14,11 +14,13 @@ const app = express();
 
 const authRoute = require('./route/authRoute');
 const todoRoute = require('./route/todoRoute');
+const categoryRoute = require('./route/categoryRoute');
 
 app.use(express.json());
 
 app.use('/api/auth', authRoute);
 app.use('/api/todos', todoRoute);
+app.use('/api/categories', categoryRoute);
 
 app.use(logger);
 

@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const Todo = require('../model/Todo');
 const AppError = require('../util/AppError');
 const catchAsync = require('../util/catchAsync');
+const logActivity = require('../service/activityLogService');
+
 
 const createTodo = catchAsync(async (req, res) => {
     const todo = await Todo.create({
@@ -14,6 +16,19 @@ const createTodo = catchAsync(async (req, res) => {
         dueDate: req.body.dueDate
     });
 
+    await logActivity({
+        user: req.user._id,
+        action: 'create',
+        resource: 'Todo',
+        resourceId: todo._id,
+        description: `Membuat Todo: ${todo.title}`,
+        metadata: {
+            title: todo.title,
+            status: todo.status,
+            priority: todo.priority
+        }
+    });
+
     res.status(201).json({
         status: 'success',
         data: {
@@ -21,6 +36,7 @@ const createTodo = catchAsync(async (req, res) => {
         }
     });
 });
+
 
 const getTodos = catchAsync(async (req, res, next) => {
     // =========================
@@ -211,6 +227,7 @@ const getTodo = catchAsync(async (req, res, next) => {
     });
 });
 
+
 const updateTodo = catchAsync(async (req, res, next) => {
     const todo = await Todo.findOne({
         _id: req.params.id,
@@ -225,6 +242,13 @@ const updateTodo = catchAsync(async (req, res, next) => {
             )
         );
     }
+
+    // Simpan data sebelum perubahan untuk Activity Log
+    const previousData = {
+        title: todo.title,
+        status: todo.status,
+        priority: todo.priority
+    };
 
     const allowedFields = [
         'category',
@@ -257,6 +281,23 @@ const updateTodo = catchAsync(async (req, res, next) => {
 
     await todo.save();
 
+    // Catat aktivitas setelah Todo berhasil diperbarui
+    await logActivity({
+        user: req.user._id,
+        action: 'update',
+        resource: 'Todo',
+        resourceId: todo._id,
+        description: `Memperbarui Todo: ${todo.title}`,
+        metadata: {
+            before: previousData,
+            after: {
+                title: todo.title,
+                status: todo.status,
+                priority: todo.priority
+            }
+        }
+    });
+
     res.status(200).json({
         status: 'success',
         data: {
@@ -264,6 +305,8 @@ const updateTodo = catchAsync(async (req, res, next) => {
         }
     });
 });
+
+
 
 const deleteTodo = catchAsync(async (req, res, next) => {
     const todo = await Todo.findOne({
@@ -280,10 +323,33 @@ const deleteTodo = catchAsync(async (req, res, next) => {
         );
     }
 
+    // Simpan informasi Todo sebelum dihapus
+    const deletedTodo = {
+        _id: todo._id,
+        title: todo.title,
+        status: todo.status,
+        priority: todo.priority
+    };
+
     await Todo.findByIdAndDelete(todo._id);
+
+    // Catat aktivitas setelah Todo berhasil dihapus
+    await logActivity({
+        user: req.user._id,
+        action: 'delete',
+        resource: 'Todo',
+        resourceId: deletedTodo._id,
+        description: `Menghapus Todo: ${deletedTodo.title}`,
+        metadata: {
+            title: deletedTodo.title,
+            status: deletedTodo.status,
+            priority: deletedTodo.priority
+        }
+    });
 
     res.status(204).send();
 });
+
 
 module.exports = {
     createTodo,

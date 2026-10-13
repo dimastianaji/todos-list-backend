@@ -10,19 +10,26 @@ const {
 
 const protect = require('../middleware/protect');
 
+const {
+    validateRequest,
+    validateCreateCategory,
+    validateUpdateCategory,
+    validateCategoryId
+} = require('../validator/categoryValidator');
+
 const router = express.Router();
 
 router.use(protect);
 
 router
     .route('/')
-    .post(createCategory)
+    .post(validateCreateCategory, validateRequest, createCategory)
     .get(getCategories);
 
 router
     .route('/:id')
-    .get(getCategory)
-    .patch(updateCategory)
-    .delete(deleteCategory);
+    .get(validateCategoryId, validateRequest, getCategory)
+    .patch(validateUpdateCategory, validateRequest, updateCategory)
+    .delete(validateCategoryId, validateRequest, deleteCategory);
 
 module.exports = router;

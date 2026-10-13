@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Todo = require('../model/Todo');
 const AppError = require('../util/AppError');
 const catchAsync = require('../util/catchAsync');
@@ -21,14 +22,166 @@ const createTodo = catchAsync(async (req, res) => {
     });
 });
 
-const getTodos = catchAsync(async (req, res) => {
-    const todos = await Todo.find({
+const getTodos = catchAsync(async (req, res, next) => {
+    // =========================
+    // PAGINATION
+    // =========================
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
+    const limit = Math.min(
+        Math.max(parseInt(req.query.limit, 10) || 10, 1),
+        100
+    );
+
+    const skip = (page - 1) * limit;
+
+    // =========================
+    // FILTER
+    // =========================
+    const filter = {
         user: req.user._id
-    }).populate('category');
+    };
+
+    // Filter berdasarkan status
+    if (req.query.status) {
+        const allowedStatus = [
+            'pending',
+            'in_progress',
+            'completed'
+        ];
+
+        if (!allowedStatus.includes(req.query.status)) {
+            return next(
+                new AppError(
+                    'Status tidak valid. Gunakan pending, in_progress, atau completed.',
+                    400
+                )
+            );
+        }
+
+        filter.status = req.query.status;
+    }
+
+    // Filter berdasarkan priority
+    if (req.query.priority) {
+        const allowedPriority = [
+            'low',
+            'medium',
+            'high'
+        ];
+
+        if (!allowedPriority.includes(req.query.priority)) {
+            return next(
+                new AppError(
+                    'Priority tidak valid. Gunakan low, medium, atau high.',
+                    400
+                )
+            );
+        }
+
+        filter.priority = req.query.priority;
+    }
+
+    // Filter berdasarkan category
+    if (req.query.category) {
+        if (!mongoose.Types.ObjectId.isValid(req.query.category)) {
+            return next(
+                new AppError(
+                    'Category ID tidak valid.',
+                    400
+                )
+            );
+        }
+
+        filter.category = req.query.category;
+    }
+
+    // =========================
+    // SEARCH
+    // =========================
+    if (req.query.search) {
+        const search = req.query.search.trim();
+
+        if (search) {
+            filter.$or = [
+                {
+                    title: {
+                        $regex: search,
+                        $options: 'i'
+                    }
+                },
+                {
+                    description: {
+                        $regex: search,
+                        $options: 'i'
+                    }
+                }
+            ];
+        }
+    }
+
+    // =========================
+    // SORTING
+    // =========================
+    const allowedSortFields = [
+        'createdAt',
+        'updatedAt',
+        'dueDate',
+        'title',
+        'priority',
+        'status'
+    ];
+
+    let sort = '-createdAt';
+
+    if (req.query.sort) {
+        const requestedSort = req.query.sort;
+
+        const sortField = requestedSort.startsWith('-')
+            ? requestedSort.substring(1)
+            : requestedSort;
+
+        if (!allowedSortFields.includes(sortField)) {
+            return next(
+                new AppError(
+                    `Field sorting tidak valid. Gunakan: ${allowedSortFields.join(', ')}.`,
+                    400
+                )
+            );
+        }
+
+        sort = requestedSort;
+    }
+
+    // =========================
+    // QUERY
+    // =========================
+    const [todos, total] = await Promise.all([
+        Todo.find(filter)
+            .populate('category')
+            .sort(sort)
+            .skip(skip)
+            .limit(limit),
+
+        Todo.countDocuments(filter)
+    ]);
+
+    // =========================
+    // PAGINATION INFO
+    // =========================
+    const totalPages = Math.ceil(total / limit);
 
     res.status(200).json({
         status: 'success',
         results: todos.length,
+        pagination: {
+            currentPage: page,
+            limit,
+            totalItems: total,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1
+        },
         data: {
             todos
         }

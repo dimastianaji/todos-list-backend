@@ -1,33 +1,7 @@
 require('dotenv').config();
 
-const express = require('express');
-
+const app = require('./app');
 const connectDB = require('./config/database');
-
-const logger = require('./middleware/Logger');
-const notFound = require('./middleware/notFound');
-const errorHandler = require('./middleware/errorHandler');
-const protect = require('./middleware/protect');
-const restrictTo = require('./middleware/restrictTo');
-
-const app = express();
-
-const authRoute = require('./route/authRoute');
-const todoRoute = require('./route/todoRoute');
-const categoryRoute = require('./route/categoryRoute');
-const statsRoute = require('./route/statsRoute');
-
-app.use(express.json());
-
-app.use('/api/auth', authRoute);
-app.use('/api/todos', todoRoute);
-app.use('/api/categories', categoryRoute);
-app.use('/api/stats', statsRoute);
-
-app.use(logger);
-
-app.use(notFound);
-app.use(errorHandler);
 
 const startServer = async () => {
     await connectDB();

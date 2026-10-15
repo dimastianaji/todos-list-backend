@@ -9,7 +9,7 @@ const protect = catchAsync(async (req, res, next) => {
 
     if (
         req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
+        req.headers.authorization.startsWith('Bearer ')
     ) {
         token = req.headers.authorization.split(' ')[1];
     }
@@ -23,10 +23,21 @@ const protect = catchAsync(async (req, res, next) => {
         );
     }
 
-    const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET
-    );
+    let decoded;
+
+    try {
+        decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
+    } catch (error) {
+        return next(
+            new AppError(
+                'Token tidak valid atau sudah kedaluwarsa.',
+                401
+            )
+        );
+    }
 
     const currentUser = await User.findById(decoded.id);
 

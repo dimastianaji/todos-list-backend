@@ -52,6 +52,39 @@ const mockTodoFind = (todos) => {
     return query;
 };
 
+// Helper untuk meniru query Mongoose pada getTodo
+const mockTodoFindOne = (todo) => {
+    const query = {
+        populate: jest.fn()
+    };
+
+    query.populate.mockResolvedValue(todo);
+
+    Todo.findOne.mockReturnValue(query);
+
+    return query;
+};
+
+// Helper untuk meniru dokumen Todo yang bisa disimpan
+const createMockTodoDocument = (overrides = {}) => {
+    return {
+        _id: TODO_ID,
+        user: USER_ID,
+        title: 'Todo lama',
+        description: 'Deskripsi lama',
+        status: 'pending',
+        priority: 'medium',
+        category: undefined,
+        dueDate: undefined,
+        completedAt: null,
+        save: jest.fn().mockImplementation(async function () {
+            return this;
+        }),
+        ...overrides
+    };
+};
+
+// Helper untuk menyiapkan user yang sudah terautentikasi
 const mockUser = () => {
     User.findById.mockResolvedValue({
         _id: USER_ID,
@@ -60,6 +93,11 @@ const mockUser = () => {
         role: 'user'
     });
 };
+
+
+// ==================================================
+// TODO API - AUTHENTICATION DAN CREATE
+// ==================================================
 
 describe('Todo API - Authentication dan Create', () => {
     beforeEach(() => {
@@ -181,6 +219,11 @@ describe('Todo API - Authentication dan Create', () => {
         expect(logActivity).not.toHaveBeenCalled();
     });
 });
+
+
+// ==================================================
+// TODO API - GET TODOS
+// ==================================================
 
 describe('Todo API - Get Todos', () => {
     beforeEach(() => {
@@ -339,5 +382,162 @@ describe('Todo API - Get Todos', () => {
 
         expect(Todo.find).not.toHaveBeenCalled();
         expect(Todo.countDocuments).not.toHaveBeenCalled();
+    });
+});
+
+
+// ==================================================
+// TODO API - DETAIL, UPDATE, DAN DELETE
+// ==================================================
+
+describe('Todo API - Detail, Update, dan Delete', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+
+        logActivity.mockResolvedValue(undefined);
+        mockUser();
+    });
+
+    // GET /api/todos/:id
+    test('harus berhasil menampilkan detail Todo', async () => {
+        const todo = {
+            _id: TODO_ID,
+            title: 'Belajar Jest',
+            status: 'pending',
+            priority: 'high'
+        };
+
+        mockTodoFindOne(todo);
+
+        const response = await request(app)
+            .get(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.status).toBe('success');
+        expect(response.body.data.todo.title).toBe('Belajar Jest');
+
+        expect(Todo.findOne).toHaveBeenCalledWith({
+            _id: TODO_ID,
+            user: USER_ID
+        });
+    });
+
+    test('harus mengembalikan 404 jika detail Todo tidak ditemukan', async () => {
+        mockTodoFindOne(null);
+
+        const response = await request(app)
+            .get(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`);
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.status).toBe('fail');
+    });
+
+    // PATCH /api/todos/:id
+    test('harus berhasil memperbarui Todo dan mencatat Activity Log', async () => {
+        const todo = createMockTodoDocument();
+
+        Todo.findOne.mockResolvedValue(todo);
+
+        const response = await request(app)
+            .patch(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`)
+            .send({
+                title: 'Todo baru',
+                status: 'completed',
+                priority: 'high'
+            });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.status).toBe('success');
+        expect(response.body.data.todo.title).toBe('Todo baru');
+        expect(response.body.data.todo.status).toBe('completed');
+        expect(response.body.data.todo.priority).toBe('high');
+
+        expect(todo.save).toHaveBeenCalledTimes(1);
+
+        expect(logActivity).toHaveBeenCalledWith(
+            expect.objectContaining({
+                user: USER_ID,
+                action: 'update',
+                resource: 'Todo',
+                resourceId: TODO_ID,
+                metadata: expect.objectContaining({
+                    before: expect.objectContaining({
+                        title: 'Todo lama',
+                        status: 'pending',
+                        priority: 'medium'
+                    }),
+                    after: expect.objectContaining({
+                        title: 'Todo baru',
+                        status: 'completed',
+                        priority: 'high'
+                    })
+                })
+            })
+        );
+    });
+
+    test('harus mengembalikan 404 jika Todo yang diperbarui tidak ditemukan', async () => {
+        Todo.findOne.mockResolvedValue(null);
+
+        const response = await request(app)
+            .patch(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`)
+            .send({
+                title: 'Judul baru'
+            });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.status).toBe('fail');
+
+        expect(logActivity).not.toHaveBeenCalled();
+    });
+
+    // DELETE /api/todos/:id
+    test('harus berhasil menghapus Todo dan mencatat Activity Log', async () => {
+        const todo = {
+            _id: TODO_ID,
+            title: 'Todo yang dihapus',
+            status: 'pending',
+            priority: 'high'
+        };
+
+        Todo.findOne.mockResolvedValue(todo);
+        Todo.findByIdAndDelete.mockResolvedValue(todo);
+
+        const response = await request(app)
+            .delete(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`);
+
+        expect(response.statusCode).toBe(204);
+        expect(response.text).toBe('');
+
+        expect(Todo.findByIdAndDelete).toHaveBeenCalledWith(TODO_ID);
+
+        expect(logActivity).toHaveBeenCalledWith(
+            expect.objectContaining({
+                user: USER_ID,
+                action: 'delete',
+                resource: 'Todo',
+                resourceId: TODO_ID,
+                description: 'Menghapus Todo: Todo yang dihapus'
+            })
+        );
+    });
+
+    test('harus mengembalikan 404 jika Todo yang dihapus tidak ditemukan', async () => {
+        Todo.findOne.mockResolvedValue(null);
+
+        const response = await request(app)
+            .delete(`/api/todos/${TODO_ID}`)
+            .set('Authorization', `Bearer ${createToken()}`);
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.status).toBe('fail');
+
+        expect(Todo.findByIdAndDelete).not.toHaveBeenCalled();
+        expect(logActivity).not.toHaveBeenCalled();
     });
 });

@@ -9,6 +9,10 @@ const todoRoute = require('./route/todoRoute');
 const categoryRoute = require('./route/categoryRoute');
 const statsRoute = require('./route/statsRoute');
 
+// Swagger
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+
 const app = express();
 
 app.use(express.json());
@@ -16,7 +20,10 @@ app.use(express.json());
 // Logger dipasang sebelum seluruh route
 app.use(logger);
 
-// Pendaftaran route
+// Dokumentasi API interaktif menggunakan Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Pendaftaran route API
 app.use('/api/auth', authRoute);
 app.use('/api/todos', todoRoute);
 app.use('/api/categories', categoryRoute);
